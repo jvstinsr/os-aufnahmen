@@ -1,10 +1,46 @@
-# Demo: Startbildschirm/Schreibtisch zeigen, dann die Einstellungen öffnen (zeigt die deutsche Oberfläche).
-ablauf() {
-  warte 1.5
+# Demo (5-s-Videos): zeigt die deutsche Oberfläche.
+#  macOS : Schreibtisch → Systemeinstellungen → „Sprache & Region“
+#  iPhone: Home-Bildschirm → Einstellungen antippen → „Allgemein“
+#  iPad  : Einstellungen (Start dort, das News-Widget des Home-Bildschirms zeigt englische Schlagzeilen) →
+#          „Sprache & Region“
+
+vorbereiten() {
   if [ "$GERAET" = macos ]; then
-    app "System Settings"
+    brew install displayplacer >/dev/null 2>&1 || true
+    ID=$(displayplacer list | awk '/Persistent screen id:/{print $4; exit}')
+    [ -n "$ID" ] && displayplacer "id:$ID res:1920x1080 hz:60 color_depth:7 scaling:off origin:(0,0) degree:0" || true
+    PIC=$(ls "/System/Library/Desktop Pictures/"*.heic 2>/dev/null | grep -iE "tahoe|sequoia|sonoma" | head -1)
+    [ -z "$PIC" ] && PIC=$(ls "/System/Library/Desktop Pictures/"*.heic | head -1)
+    osascript -e "tell application \"System Events\" to tell every desktop to set picture to \"$PIC\"" || true
+    sudo killall softwareupdated 2>/dev/null || true   # Hinweis „Software Update Available“ kam noch englisch
+    open -a "System Settings"; sleep 6; osascript -e 'quit app "System Settings"'; sleep 2
+    system_profiler SPDisplaysDataType | grep -E "Resolution|Auflösung" >> "$OUT/system.txt" || true
   else
-    app com.apple.Preferences
+    xcrun simctl launch "$UDID" com.apple.Preferences; sleep 15    # Symbole laden beim ersten Start langsam
+    xcrun simctl terminate "$UDID" com.apple.Preferences; sleep 2
+    if [ "$GERAET" = ipad ]; then
+      xcrun simctl launch "$UDID" com.apple.Preferences; sleep 6
+    fi
   fi
-  warte 2
+}
+
+ablauf() {
+  case "$GERAET" in
+    macos)
+      warte 1.5
+      app "System Settings"
+      warte 2.5
+      open "x-apple.systempreferences:com.apple.Localization-Settings.extension"
+      warte 2.5 ;;
+    iphone)
+      warte 1.5
+      axe tap --label "Einstellungen" --udid "$UDID" || app com.apple.Preferences
+      warte 2.2
+      axe tap --label "Allgemein" --wait-timeout 4 --udid "$UDID" || true
+      warte 2 ;;
+    ipad)
+      warte 1.2
+      axe tap --label "Sprache & Region" --wait-timeout 4 --udid "$UDID" || true
+      warte 3 ;;
+  esac
 }
