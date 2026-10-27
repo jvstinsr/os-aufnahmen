@@ -57,6 +57,7 @@ jobs:
       - name: Simulator starten (iPhone / iPad)
         if: inputs.geraet != 'macos'
         run: |
+          brew install cameroncooke/axe/axe >/dev/null 2>&1 || echo "AXe-Installation fehlgeschlagen" | tee -a "$OUT/system.txt"
           xcrun simctl list runtimes | tee -a "$OUT/system.txt"
           case "$GERAET" in
             iphone) MUSTER='iPhone [0-9]+ Pro \(' ;;
