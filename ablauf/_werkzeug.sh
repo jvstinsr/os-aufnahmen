@@ -36,6 +36,27 @@ url() { if [ "$GERAET" = macos ]; then open "$1"; else xcrun simctl openurl "$UD
 
 warte() { sleep "$1"; }
 
+beschriftungen() {  # iOS: alle sichtbaren Beschriftungen (AXLabel) des Bildschirms, eine pro Zeile
+  axe describe-ui --udid "$UDID" 2>/dev/null | python3 -c '
+import json, sys
+seen = []
+def walk(n):
+    if isinstance(n, dict):
+        l = n.get("AXLabel")
+        if l and l not in seen:
+            seen.append(l)
+        for v in n.values():
+            walk(v)
+    elif isinstance(n, list):
+        for v in n:
+            walk(v)
+try:
+    walk(json.load(sys.stdin))
+except Exception:
+    pass
+print("\n".join(seen))'
+}
+
 tippe() {  # iOS: Element mit genau dieser Beschriftung antippen (bei mehreren Treffern das größte = ganze Zeile)
   local label="$1" t0=$(date +%s) pos=""
   while [ -z "$pos" ] && [ $(( $(date +%s) - t0 )) -lt "${2:-8}" ]; do
