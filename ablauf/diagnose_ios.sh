@@ -1,5 +1,6 @@
 # Diagnose iOS: AXe-Befehle und Bedienelemente (Startbildschirm, Einstellungen) in diagnose.txt.
 vorbereiten() {
+  set +e
   {
     echo "== axe --version"; axe --version
     for c in "" tap swipe gesture button type key describe-ui touch; do echo "== axe $c --help"; axe $c --help; done
@@ -12,5 +13,6 @@ vorbereiten() {
     xcrun simctl io "$UDID" screenshot "$OUT/prefs_url.png"
     xcrun simctl terminate "$UDID" com.apple.Preferences
   } > "$OUT/diagnose.txt" 2>&1
+  set -e
 }
 ablauf() { warte 1; }
