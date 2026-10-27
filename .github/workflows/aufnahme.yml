@@ -1,0 +1,100 @@
+name: Aufnahme
+# Bildschirmaufnahmen auf echten Macs von GitHub (macOS 26, Apple Silicon): macOS selbst oder Apples
+# iOS-/iPadOS-Simulator. Alles auf Deutsch. Gestartet von D:\VideoFactory\osaufnahme (gh workflow run).
+on:
+  workflow_dispatch:
+    inputs:
+      geraet:
+        description: "macos | iphone | ipad"
+        required: true
+        default: macos
+      ablauf:
+        description: "Skript in ablauf/ (ohne .sh)"
+        required: true
+        default: demo
+      sekunden:
+        description: "Videolänge in Sekunden"
+        required: true
+        default: "5"
+      auftrag:
+        description: "Kennung zum Wiederfinden"
+        required: false
+        default: ""
+
+run-name: "Aufnahme ${{ inputs.geraet }} – ${{ inputs.ablauf }} ${{ inputs.auftrag }}"
+
+jobs:
+  aufnahme:
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      GERAET: ${{ inputs.geraet }}
+      SEKUNDEN: ${{ inputs.sekunden }}
+      OUT: ${{ github.workspace }}/ergebnis
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deutsch einstellen
+        run: |
+          mkdir -p "$OUT"
+          sw_vers | tee "$OUT/system.txt"
+          system_profiler SPDisplaysDataType | grep -E "Resolution|Auflösung" | tee -a "$OUT/system.txt" || true
+          if [ "$GERAET" = macos ]; then
+            defaults write -g AppleLanguages -array de-DE en-US
+            defaults write -g AppleLocale -string de_DE
+            defaults write -g AppleMeasurementUnits -string Centimeters
+            defaults write -g AppleMetricUnits -bool true
+            defaults write -g AppleICUForce24HourTime -bool true
+            defaults write com.apple.HIToolbox AppleSelectedInputSources -array \
+              '<dict><key>InputSourceKind</key><string>Keyboard Layout</string><key>KeyboardLayout ID</key><integer>3</integer><key>KeyboardLayout Name</key><string>German</string></dict>'
+            sudo languagesetup -langspec de >/dev/null 2>&1 || true
+            sudo systemsetup -settimezone Europe/Berlin >/dev/null 2>&1 || true
+            defaults write com.apple.finder CreateDesktop -bool false
+            for p in Finder Dock SystemUIServer ControlCenter NotificationCenter; do killall "$p" 2>/dev/null || true; done
+            sleep 8
+          fi
+
+      - name: Simulator starten (iPhone / iPad)
+        if: inputs.geraet != 'macos'
+        run: |
+          xcrun simctl list runtimes | tee -a "$OUT/system.txt"
+          case "$GERAET" in
+            iphone) MUSTER='iPhone [0-9]+ Pro \(' ;;
+            ipad)   MUSTER='iPad Pro .*13' ;;
+          esac
+          # neuestes passendes Gerät der neuesten iOS-Laufzeit
+          RT=$(xcrun simctl list runtimes -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['isAvailable']]; print(sorted(r,key=lambda x:[int(v) for v in x['version'].split('.')])[-1]['identifier'])")
+          LINE=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']['$RT']
+          m=[x for x in d if re.search(r'''$MUSTER''', x['name'] + ' (')]
+          m=sorted(m, key=lambda x: x['name'])
+          print(m[-1]['udid'] + '|' + m[-1]['name'])")
+          UDID=${LINE%%|*}; echo "Gerät: ${LINE#*|} ($RT)" | tee -a "$OUT/system.txt"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl spawn "$UDID" defaults write -g AppleLanguages -array de-DE
+          xcrun simctl spawn "$UDID" defaults write -g AppleLocale -string de_DE
+          xcrun simctl spawn "$UDID" defaults write -g AppleKeyboards -array 'de_DE@sw=QWERTZ-German;hw=Automatic' 'emoji@sw=Emoji'
+          xcrun simctl shutdown "$UDID"
+          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --operatorName "" --batteryState charged --batteryLevel 100
+          sleep 10
+
+      - name: Aufnahme
+        run: |
+          source ablauf/_werkzeug.sh
+          source "ablauf/${{ inputs.ablauf }}.sh"
+          vorbereiten
+          video_start
+          ablauf
+          video_ende
+          foto "$OUT/schluss.png"
+          ls -la "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aufnahme
+          path: ergebnis/
+          retention-days: 7
