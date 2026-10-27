@@ -38,13 +38,13 @@ ablauf() {
       warte 2.5 ;;
     iphone)
       warte 1.5
-      axe tap --label "Einstellungen" --udid "$UDID" || app com.apple.Preferences
+      tippe "Einstellungen" || app com.apple.Preferences
       warte 2.2
-      axe tap --label "Allgemein" --wait-timeout 8 --udid "$UDID" || true
+      tippe "Allgemein" || true
       warte 2 ;;
     ipad)
       warte 1.2
-      axe tap --label "Sprache & Region" --wait-timeout 8 --udid "$UDID" || true
+      tippe "Sprache & Region" || true
       warte 3 ;;
   esac
 }
